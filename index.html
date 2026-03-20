@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+</head>
+
+<body>
+
+<h2>ログイン</h2>
+
+<div class="card">
+<input id="id" placeholder="ID">
+<input id="pass" type="password" placeholder="PASS">
+<button onclick="login()">ログイン</button>
+</div>
+
+<script src="login.js?v=20260320"></script>
+
+<!-- ServiceWorker停止 -->
+<script>
+if("serviceWorker" in navigator){
+navigator.serviceWorker.getRegistrations().then(regs=>{
+regs.forEach(r=>r.unregister());
+});
+}
+</script>
+
+</body>
+</html>

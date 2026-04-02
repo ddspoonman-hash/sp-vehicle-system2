@@ -1,31 +1,33 @@
-const GAS="https://script.google.com/macros/s/AKfycbwbMFxKiQlT_hpb_iNjljeEvKZ7LMr9q8i2KpdW6iWrO6d3pv40iun7SLRTFAstn9C5/exec";
+const GAS = "https://script.google.com/macros/s/AKfycby-ApxknjJjXxRJtMSkwC62tzzGuRGLffGKE0Qq5duhv8dw7G-w4yHKA166Bx0WZkM/exec";
 
 function login(){
+  const id = String(document.getElementById("id").value || "").trim();
+  const pass = String(document.getElementById("pass").value || "").trim();
 
-const id = document.getElementById("id").value;
-const pass = document.getElementById("pass").value;
+  window.handleLogin = function(list){
+    const user = (list || []).find(u =>
+      String(u.id || "").trim() === id &&
+      String(u.pass || "").trim() === pass
+    );
 
-window.cb_login = function(list){
+    if(!user){
+      alert("IDまたはPASS違う");
+      return;
+    }
 
-const user = list.find(u=>u.id==id && u.pass==pass);
+    localStorage.setItem("user", JSON.stringify(user));
 
-if(!user){
-alert("IDまたはPASS違う");
-return;
-}
+    if(String(user.id || "").trim().toLowerCase() === "admin"){
+      location.href = "admin.html";
+    }else{
+      location.href = "driver_start.html";
+    }
+  };
 
-localStorage.setItem("user",JSON.stringify(user));
-
-if(user.id==="admin"){
-location.href="admin.html";
-}else{
-location.href="driver_start.html";
-}
-
-};
-
-const s=document.createElement("script");
-s.src=GAS+"?type=drivers&callback=cb_login&t="+Date.now();
-document.body.appendChild(s);
-
+  const script = document.createElement("script");
+  script.src = GAS + "?type=drivers&callback=handleLogin&t=" + Date.now();
+  script.onerror = function(){
+    alert("ログイン通信に失敗しました");
+  };
+  document.body.appendChild(script);
 }

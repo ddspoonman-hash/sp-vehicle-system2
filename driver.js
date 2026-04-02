@@ -3,6 +3,10 @@ const GAS = "https://script.google.com/macros/s/AKfycby-ApxknjJjXxRJtMSkwC62tzzG
 let gpsWatchId = null;
 let wakeLockSentinel = null;
 
+let initCache = null;
+let meterLoading = false;
+let startProcessing = false;
+
 // ---------------- JSONP ----------------
 function jsonp(url){
   return new Promise((resolve, reject) => {
@@ -27,6 +31,43 @@ function jsonp(url){
   });
 }
 
+// ---------------- UI補助 ----------------
+function setStartButtonState(enabled, text){
+  const btn = document.getElementById("startBtn");
+  if(!btn) return;
+  btn.disabled = !enabled;
+  if(text) btn.textContent = text;
+}
+
+function setMeterLoadingState(loading){
+  meterLoading = loading;
+  const meterInput = document.getElementById("meter");
+  if(!meterInput) return;
+
+  if(loading){
+    meterInput.value = "読込中...";
+    setStartButtonState(false, "メーター読込中...");
+  }
+}
+
+function setMeterLoaded(value){
+  const meterInput = document.getElementById("meter");
+  if(!meterInput) return;
+
+  meterLoading = false;
+  meterInput.value = value;
+  setStartButtonState(true, "出発");
+}
+
+function setMeterLoadError(){
+  const meterInput = document.getElementById("meter");
+  if(!meterInput) return;
+
+  meterLoading = false;
+  meterInput.value = "取得失敗";
+  setStartButtonState(false, "メーター取得失敗");
+}
+
 // ---------------- 初期 ----------------
 window.onload = async () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -47,36 +88,69 @@ window.onload = async () => {
 };
 
 // ---------------- 出発画面 ----------------
-async function initStart(){
-  const data = await jsonp(GAS + "?type=init");
-  const driverSelect = document.getElementById("driverName");
+async function getInitData(force = false){
+  if(initCache && !force) return initCache;
+  initCache = await jsonp(GAS + "?type=init");
+  return initCache;
+}
+
+async function loadMeterForSelectedCar(){
   const carSelect = document.getElementById("car");
-  const meterInput = document.getElementById("meter");
-  const user = JSON.parse(localStorage.getItem("user"));
+  if(!carSelect) return;
 
-  driverSelect.innerHTML = "";
-  (data.drivers || []).forEach(d => {
-    const o = document.createElement("option");
-    o.value = d.name;
-    o.textContent = d.name;
-    if(user && d.name === user.name) o.selected = true;
-    driverSelect.appendChild(o);
-  });
+  const car = String(carSelect.value || "").trim();
+  if(!car){
+    setMeterLoadError();
+    return;
+  }
 
-  carSelect.innerHTML = "";
-  (data.cars || []).forEach(c => {
-    const o = document.createElement("option");
-    o.value = c;
-    o.textContent = c;
-    carSelect.appendChild(o);
-  });
+  setMeterLoadingState(true);
 
-  carSelect.onchange = async () => {
-    const m = await jsonp(GAS + "?type=meter&car=" + encodeURIComponent(carSelect.value));
-    meterInput.value = m;
-  };
+  try{
+    const m = await jsonp(GAS + "?type=meter&car=" + encodeURIComponent(car));
+    setMeterLoaded(m);
+  }catch(e){
+    console.error("meter load error", e);
+    setMeterLoadError();
+  }
+}
 
-  carSelect.dispatchEvent(new Event("change"));
+async function initStart(){
+  try{
+    setStartButtonState(false, "読込中...");
+
+    const data = await getInitData();
+    const driverSelect = document.getElementById("driverName");
+    const carSelect = document.getElementById("car");
+    const user = JSON.parse(localStorage.getItem("user"));
+
+    driverSelect.innerHTML = "";
+    (data.drivers || []).forEach(d => {
+      const o = document.createElement("option");
+      o.value = d.name;
+      o.textContent = d.name;
+      if(user && d.name === user.name) o.selected = true;
+      driverSelect.appendChild(o);
+    });
+
+    carSelect.innerHTML = "";
+    (data.cars || []).forEach(c => {
+      const o = document.createElement("option");
+      o.value = c;
+      o.textContent = c;
+      carSelect.appendChild(o);
+    });
+
+    carSelect.onchange = async () => {
+      await loadMeterForSelectedCar();
+    };
+
+    await loadMeterForSelectedCar();
+  }catch(e){
+    console.error("initStart error", e);
+    setStartButtonState(false, "初期化失敗");
+    alert("初期データの読込に失敗しました");
+  }
 }
 
 // ---------------- 位置情報確認 ----------------
@@ -123,17 +197,36 @@ async function ensureGpsReady(){
 
 // ---------------- 出発 ----------------
 async function start(){
+  if(startProcessing) return;
+  if(meterLoading){
+    alert("メーター読込中です。少し待ってください。");
+    return;
+  }
+
+  const startBtn = document.getElementById("startBtn");
+  const meterValue = String(document.getElementById("meter")?.value || "").trim();
+
+  if(!meterValue || meterValue === "読込中..." || meterValue === "取得失敗"){
+    alert("メーター取得完了後に出発してください。");
+    return;
+  }
+
   try{
+    startProcessing = true;
+    setStartButtonState(false, "出発処理中...");
+
     const user = JSON.parse(localStorage.getItem("user"));
     const selectedCar = String(document.getElementById("car").value || "").trim();
     const selectedDriver = String(document.getElementById("driverName").value || "").trim();
-    const selectedMeter = String(document.getElementById("meter").value || "").trim();
+    const selectedMeter = meterValue;
 
     try{
       await ensureGpsReady();
     }catch(e){
       alert("位置情報が取得できません。\n位置情報をONにして、アプリ画面に戻って数秒待ってからもう一度お試しください。");
       console.error("start gps check error", e);
+      startProcessing = false;
+      setStartButtonState(true, "出発");
       return;
     }
 
@@ -150,6 +243,8 @@ async function start(){
   }catch(e){
     alert("出発処理エラー");
     console.error(e);
+    startProcessing = false;
+    setStartButtonState(true, "出発");
   }
 }
 
@@ -287,7 +382,6 @@ async function enableWakeLock(){
       console.log("Wake Lock released");
     });
 
-    console.log("Wake Lock ON");
     return true;
   }catch(e){
     console.log("Wake Lock取得失敗", e);
@@ -302,7 +396,6 @@ async function disableWakeLock(){
       await wakeLockSentinel.release();
       wakeLockSentinel = null;
       updateWakeLockStatus("画面点灯補助：OFF", true);
-      console.log("Wake Lock OFF");
     }
   }catch(e){
     console.log("Wake Lock解除失敗", e);

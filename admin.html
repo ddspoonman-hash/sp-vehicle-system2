@@ -1,109 +1,124 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>管理画面</title>
-
-<style>
-*{
-box-sizing:border-box;
-}
-
-body{
-font-family:sans-serif;
-margin:0;
-padding:10px;
-background:#f5f5f5;
-}
-
-.card{
-background:#fff;
-padding:15px;
-margin:10px 0;
-border-radius:12px;
-box-shadow:0 2px 6px rgba(0,0,0,0.1);
-}
-
-h3{
-margin:5px 0;
-}
-
-input,select,button{
-width:100%;
-padding:12px;
-margin-top:8px;
-font-size:16px;
-border-radius:8px;
-border:1px solid #ccc;
-}
-
-button{
-background:#007bff;
-color:#fff;
-border:none;
-}
-
-.header{
-display:flex;
-justify-content:space-between;
-align-items:center;
-margin-bottom:10px;
-}
-</style>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>管理画面（試験版）</title>
+  <style>
+    *{ box-sizing:border-box; }
+    body{
+      font-family:sans-serif;
+      margin:0;
+      padding:10px;
+      background:#f5f5f5;
+    }
+    .card{
+      background:#fff;
+      padding:15px;
+      margin:10px 0;
+      border-radius:12px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.1);
+    }
+    h2{ margin:0 0 10px 0; }
+    h3{ margin:5px 0; }
+    input,select,button{
+      width:100%;
+      padding:12px;
+      margin-top:8px;
+      font-size:16px;
+      border-radius:8px;
+      border:1px solid #ccc;
+    }
+    button{
+      background:#007bff;
+      color:#fff;
+      border:none;
+    }
+    .subtle{
+      background:#666;
+    }
+    .row-gap{
+      margin-top:12px;
+    }
+  </style>
 </head>
-
 <body>
+  <h2>管理画面（試験版）</h2>
 
-<h2>管理画面</h2>
+  <button onclick="location.href='reservation.html'">予約管理</button>
 
-<button onclick="location.href='reservation.html'">予約管理</button>
+  <div class="card">
+    <button class="subtle" onclick="logout()">ログアウト</button>
+    <h3>使用中車両（位置）</h3>
+    <div id="running">読み込み中...</div>
+  </div>
 
-<div class="card">
-<h3>使用中車両（位置）</h3>
-<div id="running"></div>
-</div>
+  <div class="card">
+    <h3>CSV出力</h3>
+    <button onclick="downloadCSV()">全体CSVダウンロード</button>
+  </div>
 
-<div class="card">
-<h3>CSV出力</h3>
-<button onclick="downloadCSV()">ダウンロード</button>
-</div>
+  <div class="card">
+    <h3>車両別CSV</h3>
+    <select id="csvCar"></select>
+    <button onclick="downloadCarCSV()">ダウンロード</button>
+  </div>
 
-<button onclick="downloadCarCSV()">車両別CSV</button>
+  <div class="card">
+    <h3>車両別 月次CSV</h3>
+    <select id="csvCarMonth"></select>
+    <input type="month" id="csvMonth">
+    <button onclick="downloadCarMonthCSV()">ダウンロード</button>
+  </div>
 
-<div class="card">
-<h3>車両追加</h3>
-<input id="newCar" placeholder="車両名">
-<button onclick="addCar()">追加</button>
-</div>
+  <div class="card">
+    <h3>車両追加</h3>
+    <input id="newCar" placeholder="車両名">
+    <button onclick="addCar()">追加</button>
+  </div>
 
-<div class="card">
-<h3>ドライバー追加</h3>
-<input id="newId" placeholder="ID">
-<input id="newName" placeholder="名前">
-<input id="newDept" placeholder="所属">
-<input id="newPass" placeholder="PASS">
-<button onclick="addDriver()">追加</button>
-</div>
+  <div class="card">
+    <h3>ドライバー追加</h3>
+    <input id="newId" placeholder="ID">
+    <input id="newName" placeholder="名前">
+    <input id="newDept" placeholder="所属">
+    <input id="newPass" placeholder="PASS">
+    <button onclick="addDriver()">追加</button>
+  </div>
 
-<div class="card">
-<h3>メーター補正</h3>
-<input id="fixCar" placeholder="車両">
-<input id="fixMeter" placeholder="メーター">
-<button onclick="fixMeter()">更新</button>
-</div>
+  <div class="card">
+    <h3>メーター補正</h3>
+    <input id="fixCar" placeholder="車両">
+    <input id="fixMeter" placeholder="メーター">
+    <button onclick="fixMeterAction()">更新</button>
+  </div>
 
-<button onclick="load()">更新</button>
+  <div class="card">
+    <h3>同乗者追加</h3>
+    <select id="pGroup"></select>
+    <input id="pName" placeholder="名前">
+    <button onclick="addPassenger()">追加</button>
+  </div>
 
-<div class="card">
-<h3>車両位置（地図）</h3>
-<div id="map" style="height:300px;"></div>
-</div>
+  <div class="card">
+    <h3>行き先追加</h3>
+    <input id="dName" placeholder="行き先">
+    <button onclick="addDestination()">追加</button>
+  </div>
 
-<!-- Google Maps -->
-<script src="https://maps.googleapis.com/maps/api/js?key=あなたのAPIキー"></script>
+  <div class="card">
+    <h3>用件追加</h3>
+    <input id="uName" placeholder="用件">
+    <button onclick="addPurpose()">追加</button>
+  </div>
 
-<!-- JS -->
-<script src="admin.js?v=20260320"></script>
+  <button onclick="load(true)">更新</button>
 
+  <div class="card">
+    <h3>車両位置（地図）</h3>
+    <div id="map" style="height:300px;"></div>
+  </div>
+
+  <script src="https://maps.googleapis.com/maps/api/js?key=あなたのAPIキー"></script>
+  <script src="admin.js?v=20260401-1"></script>
 </body>
 </html>

@@ -5,35 +5,49 @@
   <title>到着（試験版）</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+    .chips{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:8px;
+    }
+
     .chip{
       padding:10px 14px;
       background:#eee;
       border-radius:20px;
       font-size:14px;
       cursor:pointer;
+      user-select:none;
     }
+
     .chip.active{
       background:#007bff;
       color:#fff;
     }
+
     .tab{
       display:inline-block;
       padding:8px 12px;
       margin-right:6px;
+      margin-top:6px;
       background:#ddd;
       border-radius:10px;
       cursor:pointer;
+      user-select:none;
     }
+
     .tab.active{
       background:#007bff;
       color:#fff;
     }
+
     #gpsCount{
       margin-top:8px;
       font-size:14px;
       color:#666;
     }
+
     .warn{
       margin-top:10px;
       padding:10px;
@@ -42,6 +56,7 @@
       color:#856404;
       font-size:14px;
     }
+
     .info{
       margin-top:10px;
       padding:10px;
@@ -49,6 +64,10 @@
       background:#e8f4ff;
       color:#0b5cab;
       font-size:14px;
+    }
+
+    .bottom-space{
+      height:90px;
     }
   </style>
 </head>
@@ -83,11 +102,13 @@
     <div id="wakeLockStatus" class="info" style="display:none;"></div>
   </div>
 
+  <div class="bottom-space"></div>
+
   <div class="fixed-btn">
     <button id="arrivalBtn" class="btn-danger">到着</button>
   </div>
 
-  <script src="driver.js?v=20260402-2"></script>
+  <script src="driver.js?v=20260402-3"></script>
   <script>
     let selectedPassengers = new Set();
     let selectedDest = new Set();
@@ -104,50 +125,15 @@
       }
 
       try{
-        // ★ 爆速化ポイント：並列取得
         const [drivers, masters] = await Promise.all([
           jsonp(GAS + "?type=drivers"),
           jsonp(GAS + "?type=masters")
         ]);
 
-        const driverSelect = document.getElementById("driverSelect");
-        driverSelect.innerHTML = "";
-        (drivers || []).forEach(x => {
-          const o = document.createElement("option");
-          o.value = x.name;
-          o.textContent = x.name;
-          if(x.name === user.name) o.selected = true;
-          driverSelect.appendChild(o);
-        });
-
-        allPassengers = masters.passengers || [];
-
-        const groups = [...new Set(allPassengers.map(x => x.group))];
-        const groupTabs = document.getElementById("groupTabs");
-        groupTabs.innerHTML = "";
-
-        groups.forEach((g, i) => {
-          const tab = document.createElement("span");
-          tab.className = "tab";
-          tab.textContent = g;
-          tab.onclick = () => {
-            document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-            tab.classList.add("active");
-            renderPassengers(g);
-          };
-          if(i === 0) tab.classList.add("active");
-          groupTabs.appendChild(tab);
-        });
-
-        if(groups.length > 0) renderPassengers(groups[0]);
-
-        const destList = document.getElementById("destList");
-        destList.innerHTML = "";
-        (masters.destinations || []).forEach(x => createChip(x, destList, selectedDest));
-
-        const purposeList = document.getElementById("purposeList");
-        purposeList.innerHTML = "";
-        (masters.purposes || []).forEach(x => createChip(x, purposeList, selectedPurpose));
+        initDriverSelect(drivers, user);
+        initPassengerArea(masters);
+        initDestinations(masters);
+        initPurposes(masters);
 
         updateGpsCount();
         updateGpsWarning();
@@ -159,8 +145,7 @@
 
         const pending = localStorage.getItem("pendingArrival");
         if(pending){
-          const btn = document.getElementById("arrivalBtn");
-          btn.textContent = "未送信あり";
+          document.getElementById("arrivalBtn").textContent = "未送信あり";
         }
 
         document.getElementById("arrivalBtn").onclick = arrivalEx;
@@ -169,6 +154,58 @@
         alert("到着画面の初期化に失敗しました");
       }
     });
+
+    function initDriverSelect(drivers, user){
+      const driverSelect = document.getElementById("driverSelect");
+      driverSelect.innerHTML = "";
+
+      (drivers || []).forEach(x => {
+        const o = document.createElement("option");
+        o.value = x.name;
+        o.textContent = x.name;
+        if(x.name === user.name) o.selected = true;
+        driverSelect.appendChild(o);
+      });
+    }
+
+    function initPassengerArea(masters){
+      allPassengers = masters.passengers || [];
+
+      const groups = [...new Set(allPassengers.map(x => x.group))];
+      const groupTabs = document.getElementById("groupTabs");
+      groupTabs.innerHTML = "";
+
+      groups.forEach((g, i) => {
+        const tab = document.createElement("span");
+        tab.className = "tab";
+        tab.textContent = g;
+
+        tab.onclick = () => {
+          document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+          tab.classList.add("active");
+          renderPassengers(g);
+        };
+
+        if(i === 0) tab.classList.add("active");
+        groupTabs.appendChild(tab);
+      });
+
+      if(groups.length > 0){
+        renderPassengers(groups[0]);
+      }
+    }
+
+    function initDestinations(masters){
+      const destList = document.getElementById("destList");
+      destList.innerHTML = "";
+      (masters.destinations || []).forEach(x => createChip(x, destList, selectedDest));
+    }
+
+    function initPurposes(masters){
+      const purposeList = document.getElementById("purposeList");
+      purposeList.innerHTML = "";
+      (masters.purposes || []).forEach(x => createChip(x, purposeList, selectedPurpose));
+    }
 
     function renderPassengers(group){
       const passengerList = document.getElementById("passengerList");
@@ -186,7 +223,9 @@
       div.className = "chip";
       div.textContent = text;
 
-      if(setObj.has(text)) div.classList.add("active");
+      if(setObj.has(text)){
+        div.classList.add("active");
+      }
 
       div.onclick = () => {
         if(setObj.has(text)){
@@ -199,12 +238,6 @@
       };
 
       container.appendChild(div);
-    }
-
-    function updateGpsCount(){
-      const log = JSON.parse(localStorage.getItem("gpsLog") || "[]");
-      const gpsCount = document.getElementById("gpsCount");
-      gpsCount.textContent = "GPS件数：" + log.length;
     }
 
     function updateGpsWarning(){
@@ -243,7 +276,7 @@
             ts: Date.now()
           }),
           err => reject(err),
-          { enableHighAccuracy:true, timeout:10000, maximumAge:3000 }
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
       });
     }
@@ -268,7 +301,9 @@
         Number(point.lng)
       );
 
-      if(d < 5) return log;
+      if(d < 5){
+        return log;
+      }
 
       log.push(point);
       return log;
@@ -288,7 +323,9 @@
           result.push(log[i]);
         }
         const last = log[log.length - 1];
-        if(result[result.length - 1] !== last) result.push(last);
+        if(result[result.length - 1] !== last){
+          result.push(last);
+        }
       }
 
       return result.map(p => ({
@@ -328,7 +365,7 @@
 
       const gpsLog = compactGpsLog(rawGpsLog);
       const car = String(localStorage.getItem("lastCar") || "").trim();
-      const reqId = "ARR_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
+      const reqId = "ARR_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
 
       const passengers = [
         ...selectedPassengers,

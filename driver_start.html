@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>出発（試験版）</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="header">出発（試験版）</div>
+
+  <div class="card">
+    <button onclick="logout()" style="background:#666;">ログアウト</button>
+    <div class="status idle">待機中</div>
+
+    <h3>運転者</h3>
+    <select id="driverName"></select>
+
+    <h3>車両</h3>
+    <select id="car"></select>
+
+    <h3>メーター</h3>
+    <input id="meter" readonly>
+  </div>
+
+  <div class="fixed-btn">
+    <button onclick="start()">出発</button>
+  </div>
+
+  <script src="driver.js?v=20260401-1"></script>
+</body>
+</html>

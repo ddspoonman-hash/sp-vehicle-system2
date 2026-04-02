@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>到着（試験版）</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .chips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .chip{
+      padding:10px 14px;
+      background:#eee;
+      border-radius:20px;
+      font-size:14px;
+      cursor:pointer;
+    }
+    .chip.active{
+      background:#007bff;
+      color:#fff;
+    }
+    .tab{
+      display:inline-block;
+      padding:8px 12px;
+      margin-right:6px;
+      background:#ddd;
+      border-radius:10px;
+      cursor:pointer;
+    }
+    .tab.active{
+      background:#007bff;
+      color:#fff;
+    }
+    #gpsCount{
+      margin-top:8px;
+      font-size:14px;
+      color:#666;
+    }
+    .warn{
+      margin-top:10px;
+      padding:10px;
+      border-radius:10px;
+      background:#fff3cd;
+      color:#856404;
+      font-size:14px;
+    }
+    .info{
+      margin-top:10px;
+      padding:10px;
+      border-radius:10px;
+      background:#e8f4ff;
+      color:#0b5cab;
+      font-size:14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">到着処理（試験版）</div>
+
+  <div class="card">
+    <h3>運転者</h3>
+    <select id="driverSelect"></select>
+
+    <h3>同乗者</h3>
+    <div id="groupTabs"></div>
+    <div id="passengerList" class="chips"></div>
+    <input id="passengerOther" placeholder="その他">
+
+    <h3>行き先</h3>
+    <div id="destList" class="chips"></div>
+    <input id="destOther" placeholder="その他">
+
+    <h3>用件</h3>
+    <div id="purposeList" class="chips"></div>
+    <input id="purposeOther" placeholder="その他">
+
+    <h3>備考</h3>
+    <input id="memo">
+
+    <h3>到着メーター</h3>
+    <input id="endMeter" readonly>
+
+    <div id="gpsCount">GPS件数：0</div>
+    <div id="gpsWarn" class="warn" style="display:none;"></div>
+    <div id="wakeLockStatus" class="info" style="display:none;"></div>
+  </div>
+
+  <div class="fixed-btn">
+    <button id="arrivalBtn" class="btn-danger">到着</button>
+  </div>
+
+  <script src="driver.js?v=20260401-1"></script>
+  <script>
+    let selectedPassengers = new Set();
+    let selectedDest = new Set();
+    let selectedPurpose = new Set();
+    let allPassengers = [];
+    let arrivalSending = false;
+    let arrivalDone = false;
+
+    window.addEventListener("load", async () => {
+      const user = JSON.parse(localStorage.getItem("user"));
+      if(!user){
+        location.href = "index.html";
+        return;
+      }
+
+      const d = await jsonp(GAS + "?type=drivers");
+      const driverSelect = document.getElementById("driverSelect");
+      driverSelect.innerHTML = "";
+      (d || []).forEach(x => {
+        const o = document.createElement("option");
+        o.value = x.name;
+        o.textContent = x.name;
+        if(x.name === user.name) o.selected = true;
+        driverSelect.appendChild(o);
+      });
+
+      const m = await jsonp(GAS + "?type=masters");
+      allPassengers = m.passengers || [];
+
+      const groups = [...new Set(allPassengers.map(x => x.group))];
+      const groupTabs = document.getElementById("groupTabs");
+      groupTabs.innerHTML = "";
+
+      groups.forEach((g, i) => {
+        const tab = document.createElement("span");
+        tab.className = "tab";
+        tab.textContent = g;
+        tab.onclick = () => {
+          document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+          tab.classList.add("active");
+          renderPassengers(g);
+        };
+        if(i === 0) tab.classList.add("active");
+        groupTabs.appendChild(tab);
+      });
+
+      if(groups.length > 0) renderPassengers(groups[0]);
+
+      const destList = document.getElementById("destList");
+      destList.innerHTML = "";
+      (m.destinations || []).forEach(x => createChip(x, destList, selectedDest));
+
+      const purposeList = document.getElementById("purposeList");
+      purposeList.innerHTML = "";
+      (m.purposes || []).forEach(x => createChip(x, purposeList, selectedPurpose));
+
+      updateGpsCount();
+      updateGpsWarning();
+      setInterval(() => {
+        updateGpsCount();
+        updateGpsWarning();
+      }, 5000);
+
+      const pending = localStorage.getItem("pendingArrival");
+      if(pending){
+        const btn = document.getElementById("arrivalBtn");
+        btn.textContent = "未送信あり";
+      }
+
+      document.getElementById("arrivalBtn").onclick = arrivalEx;
+    });
+
+    function renderPassengers(group){
+      const passengerList = document.getElementById("passengerList");
+      passengerList.innerHTML = "";
+
+      allPassengers
+        .filter(x => x.group == group)
+        .forEach(x => {
+          createChip(x.name, passengerList, selectedPassengers);
+        });
+    }
+
+    function createChip(text, container, setObj){
+      const div = document.createElement("div");
+      div.className = "chip";
+      div.textContent = text;
+
+      if(setObj.has(text)) div.classList.add("active");
+
+      div.onclick = () => {
+        if(setObj.has(text)){
+          setObj.delete(text);
+          div.classList.remove("active");
+        }else{
+          setObj.add(text);
+          div.classList.add("active");
+        }
+      };
+
+      container.appendChild(div);
+    }
+
+    function updateGpsCount(){
+      const log = JSON.parse(localStorage.getItem("gpsLog") || "[]");
+      const gpsCount = document.getElementById("gpsCount");
+      gpsCount.textContent = "GPS件数：" + log.length;
+    }
+
+    function updateGpsWarning(){
+      const log = JSON.parse(localStorage.getItem("gpsLog") || "[]");
+      const warn = document.getElementById("gpsWarn");
+      if(!warn) return;
+
+      if(log.length === 0){
+        warn.style.display = "block";
+        warn.textContent = "位置情報が取得できていません。位置情報設定をご確認ください。";
+        return;
+      }
+
+      if(log.length < 3){
+        warn.style.display = "block";
+        warn.textContent = "GPS件数が少ないです。画面ON・位置情報ONでしばらく待ってから到着してください。";
+        return;
+      }
+
+      warn.style.display = "none";
+      warn.textContent = "";
+    }
+
+    function getArrivalPosition(){
+      return new Promise((resolve, reject) => {
+        if(!navigator.geolocation){
+          reject(new Error("geolocation unsupported"));
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          pos => resolve({
+            lat: Number(pos.coords.latitude),
+            lng: Number(pos.coords.longitude),
+            accuracy: Number(pos.coords.accuracy || 9999),
+            ts: Date.now()
+          }),
+          err => reject(err),
+          { enableHighAccuracy:true, timeout:10000, maximumAge:3000 }
+        );
+      });
+    }
+
+    function appendArrivalPoint(rawLog, point){
+      const log = Array.isArray(rawLog) ? rawLog.slice() : [];
+
+      if(!point || isNaN(point.lat) || isNaN(point.lng)){
+        return log;
+      }
+
+      if(log.length === 0){
+        log.push(point);
+        return log;
+      }
+
+      const last = log[log.length - 1];
+      const d = distanceOnePoint(
+        Number(last.lat),
+        Number(last.lng),
+        Number(point.lat),
+        Number(point.lng)
+      );
+
+      if(d < 5) return log;
+
+      log.push(point);
+      return log;
+    }
+
+    function compactGpsLog(log){
+      if(!log || log.length === 0) return [];
+
+      const maxPoints = 50;
+      let result = [];
+
+      if(log.length <= maxPoints){
+        result = log.slice();
+      }else{
+        const step = Math.ceil(log.length / maxPoints);
+        for(let i = 0; i < log.length; i += step){
+          result.push(log[i]);
+        }
+        const last = log[log.length - 1];
+        if(result[result.length - 1] !== last) result.push(last);
+      }
+
+      return result.map(p => ({
+        lat: Number(p.lat),
+        lng: Number(p.lng)
+      }));
+    }
+
+    async function arrivalEx(){
+      if(arrivalSending || arrivalDone) return;
+
+      const currentLog = JSON.parse(localStorage.getItem("gpsLog") || "[]");
+
+      if(currentLog.length === 0){
+        const ok = confirm("GPSが1件も取得できていません。このまま到着しますか？");
+        if(!ok) return;
+      }else if(currentLog.length < 3){
+        const ok = confirm("GPS件数が少ないです。このまま到着すると距離が短く出る可能性があります。続けますか？");
+        if(!ok) return;
+      }
+
+      arrivalSending = true;
+
+      const btn = document.getElementById("arrivalBtn");
+      btn.disabled = true;
+      btn.textContent = "送信中...";
+
+      let rawGpsLog = JSON.parse(localStorage.getItem("gpsLog") || "[]");
+
+      try{
+        const arrivalPoint = await getArrivalPosition();
+        rawGpsLog = appendArrivalPoint(rawGpsLog, arrivalPoint);
+        localStorage.setItem("gpsLog", JSON.stringify(rawGpsLog));
+      }catch(e){
+        console.log("到着時補完失敗", e);
+      }
+
+      const gpsLog = compactGpsLog(rawGpsLog);
+      const car = String(localStorage.getItem("lastCar") || "").trim();
+      const reqId = "ARR_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
+
+      const passengers = [
+        ...selectedPassengers,
+        String(document.getElementById("passengerOther").value || "").trim()
+      ].filter(Boolean).join(",");
+
+      const dest = [
+        ...selectedDest,
+        String(document.getElementById("destOther").value || "").trim()
+      ].filter(Boolean).join(",");
+
+      const purpose = [
+        ...selectedPurpose,
+        String(document.getElementById("purposeOther").value || "").trim()
+      ].filter(Boolean).join(",");
+
+      const memo = String(document.getElementById("memo").value || "").trim();
+      const driver = String(document.getElementById("driverSelect").value || "").trim();
+
+      localStorage.setItem("pendingArrival", JSON.stringify({
+        reqId,
+        car,
+        gpsLog,
+        driver,
+        passengers,
+        destinations: dest,
+        purposes: purpose,
+        memo
+      }));
+
+      const callbackName = "cb_arrival_" + reqId;
+
+      let timeout = setTimeout(() => {
+        try{ delete window[callbackName]; }catch(e){}
+        arrivalSending = false;
+        btn.disabled = false;
+        btn.textContent = "再送信";
+        alert("通信タイムアウト");
+      }, 20000);
+
+      window[callbackName] = async function(res){
+        clearTimeout(timeout);
+        try{ delete window[callbackName]; }catch(e){}
+
+        if(res && res.ok){
+          arrivalDone = true;
+          stopGPS();
+          await disableWakeLock();
+          localStorage.removeItem("gpsLog");
+          localStorage.removeItem("pendingArrival");
+          alert("完了\n距離：" + res.distance + "m");
+          location.href = "driver_start.html";
+          return;
+        }
+
+        arrivalSending = false;
+        btn.disabled = false;
+        btn.textContent = "再送信";
+        alert("保存失敗\n" + (res && res.message ? res.message : "レスポンスなし"));
+      };
+
+      const script = document.createElement("script");
+      script.src =
+        GAS + "?type=arrivalEx" +
+        "&reqId=" + encodeURIComponent(reqId) +
+        "&car=" + encodeURIComponent(car) +
+        "&gpsLog=" + encodeURIComponent(JSON.stringify(gpsLog)) +
+        "&driver=" + encodeURIComponent(driver) +
+        "&passengers=" + encodeURIComponent(passengers) +
+        "&destinations=" + encodeURIComponent(dest) +
+        "&purposes=" + encodeURIComponent(purpose) +
+        "&memo=" + encodeURIComponent(memo) +
+        "&callback=" + encodeURIComponent(callbackName) +
+        "&t=" + Date.now();
+
+      script.onerror = function(){
+        clearTimeout(timeout);
+        try{ delete window[callbackName]; }catch(e){}
+        arrivalSending = false;
+        btn.disabled = false;
+        btn.textContent = "再送信";
+        alert("送信失敗");
+      };
+
+      document.body.appendChild(script);
+    }
+  </script>
+</body>
+</html>

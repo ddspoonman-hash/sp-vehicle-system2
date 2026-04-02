@@ -5,7 +5,7 @@
   <title>到着（試験版）</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    .chips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
     .chip{
       padding:10px 14px;
       background:#eee;
@@ -87,7 +87,7 @@
     <button id="arrivalBtn" class="btn-danger">到着</button>
   </div>
 
-  <script src="driver.js?v=20260401-1"></script>
+  <script src="driver.js?v=20260402-2"></script>
   <script>
     let selectedPassengers = new Set();
     let selectedDest = new Set();
@@ -103,61 +103,71 @@
         return;
       }
 
-      const d = await jsonp(GAS + "?type=drivers");
-      const driverSelect = document.getElementById("driverSelect");
-      driverSelect.innerHTML = "";
-      (d || []).forEach(x => {
-        const o = document.createElement("option");
-        o.value = x.name;
-        o.textContent = x.name;
-        if(x.name === user.name) o.selected = true;
-        driverSelect.appendChild(o);
-      });
+      try{
+        // ★ 爆速化ポイント：並列取得
+        const [drivers, masters] = await Promise.all([
+          jsonp(GAS + "?type=drivers"),
+          jsonp(GAS + "?type=masters")
+        ]);
 
-      const m = await jsonp(GAS + "?type=masters");
-      allPassengers = m.passengers || [];
+        const driverSelect = document.getElementById("driverSelect");
+        driverSelect.innerHTML = "";
+        (drivers || []).forEach(x => {
+          const o = document.createElement("option");
+          o.value = x.name;
+          o.textContent = x.name;
+          if(x.name === user.name) o.selected = true;
+          driverSelect.appendChild(o);
+        });
 
-      const groups = [...new Set(allPassengers.map(x => x.group))];
-      const groupTabs = document.getElementById("groupTabs");
-      groupTabs.innerHTML = "";
+        allPassengers = masters.passengers || [];
 
-      groups.forEach((g, i) => {
-        const tab = document.createElement("span");
-        tab.className = "tab";
-        tab.textContent = g;
-        tab.onclick = () => {
-          document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-          tab.classList.add("active");
-          renderPassengers(g);
-        };
-        if(i === 0) tab.classList.add("active");
-        groupTabs.appendChild(tab);
-      });
+        const groups = [...new Set(allPassengers.map(x => x.group))];
+        const groupTabs = document.getElementById("groupTabs");
+        groupTabs.innerHTML = "";
 
-      if(groups.length > 0) renderPassengers(groups[0]);
+        groups.forEach((g, i) => {
+          const tab = document.createElement("span");
+          tab.className = "tab";
+          tab.textContent = g;
+          tab.onclick = () => {
+            document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+            tab.classList.add("active");
+            renderPassengers(g);
+          };
+          if(i === 0) tab.classList.add("active");
+          groupTabs.appendChild(tab);
+        });
 
-      const destList = document.getElementById("destList");
-      destList.innerHTML = "";
-      (m.destinations || []).forEach(x => createChip(x, destList, selectedDest));
+        if(groups.length > 0) renderPassengers(groups[0]);
 
-      const purposeList = document.getElementById("purposeList");
-      purposeList.innerHTML = "";
-      (m.purposes || []).forEach(x => createChip(x, purposeList, selectedPurpose));
+        const destList = document.getElementById("destList");
+        destList.innerHTML = "";
+        (masters.destinations || []).forEach(x => createChip(x, destList, selectedDest));
 
-      updateGpsCount();
-      updateGpsWarning();
-      setInterval(() => {
+        const purposeList = document.getElementById("purposeList");
+        purposeList.innerHTML = "";
+        (masters.purposes || []).forEach(x => createChip(x, purposeList, selectedPurpose));
+
         updateGpsCount();
         updateGpsWarning();
-      }, 5000);
 
-      const pending = localStorage.getItem("pendingArrival");
-      if(pending){
-        const btn = document.getElementById("arrivalBtn");
-        btn.textContent = "未送信あり";
+        setInterval(() => {
+          updateGpsCount();
+          updateGpsWarning();
+        }, 5000);
+
+        const pending = localStorage.getItem("pendingArrival");
+        if(pending){
+          const btn = document.getElementById("arrivalBtn");
+          btn.textContent = "未送信あり";
+        }
+
+        document.getElementById("arrivalBtn").onclick = arrivalEx;
+      }catch(e){
+        console.error("arrival init error", e);
+        alert("到着画面の初期化に失敗しました");
       }
-
-      document.getElementById("arrivalBtn").onclick = arrivalEx;
     });
 
     function renderPassengers(group){
@@ -351,7 +361,7 @@
 
       const callbackName = "cb_arrival_" + reqId;
 
-      let timeout = setTimeout(() => {
+      const timeout = setTimeout(() => {
         try{ delete window[callbackName]; }catch(e){}
         arrivalSending = false;
         btn.disabled = false;
